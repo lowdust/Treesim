@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <title>Élő Voxel Világ V3 – Chill Edition</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000; }
+    canvas { display: block; }
+
+    /* ✅ Közös “pill” gomb stílus */
+    .pill-btn{
+      background: rgba(255, 255, 255, 0.15);
+      padding: 12px 20px;
+      border-radius: 30px;
+      color: white;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      transition: 0.3s;
+      text-align: center;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 14px;
+      user-select: none;
+      z-index: 20;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pill-btn:hover { background: rgba(255, 255, 255, 0.3); }
+
+    /* ✅ Info (bal felül) */
+    #info{
+      position:absolute;
+      top: 12px; left: 12px;
+      min-width: 64px;
+      pointer-events: auto;
+    }
+
+    /* ✅ Jobb alsó gomb-sor */
+    #controls-row{
+      position:absolute;
+      bottom: 20px; right: 20px;
+      display:flex;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    /* ✅ YouTube mini-player keret */
+    #player-wrap{
+      display:none;
+      position:absolute;
+      bottom:70px; right:20px;
+      width:360px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,0.2);
+      overflow:hidden;
+      z-index:20;
+      background:rgba(0,0,0,0.35);
+      backdrop-filter:blur(6px);
+    }
+    #yt-embed{
+      width:360px;
+      height:203px;
+      display:block;
+      border:0;
+    }
+    #open-yt{
+      display:block;
+      padding:10px 12px;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+      font-size:13px;
+      color:#fff;
+      text-decoration:none;
+      border-top:1px solid rgba(255,255,255,0.12);
+      background:rgba(255,255,255,0.06);
+      text-align:center;
+    }
+    #open-yt:active{ opacity:0.85; }
+  </style>
+</head>
+<body>
+
+<div id="info" class="pill-btn">Info</div>
+
+<!-- ✅ MP3 lejátszó -->
+<audio id="one-song-audio" preload="none" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112762.mp3" type="audio/mpeg">
+</audio>
+
+<!-- ✅ Jobb alsó gombok -->
+<div id="controls-row">
+  <div id="one-song-btn" class="pill-btn" onclick="toggleOneSong()">🎧 Play</div>
+  <div id="audio-control" class="pill-btn" onclick="toggleMusic()">🎵 Playlist</div>
+</div>
+
+<!-- ✅ YouTube mini-player -->
+<div id="player-wrap">
+  <iframe
+    id="yt-embed"
+    title="YouTube playlist mini player"
+    allow="autoplay; encrypted-media; picture-in-picture"
+    allowfullscreen
+    loading="lazy">
+  </iframe>
+  <a id="open-yt" target="_blank" rel="noopener">Megnyitás YouTube-on ▶︎</a>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  // --- INFO: kattintásra Day számláló (csak session-ben) ---
+  const infoEl = document.getElementById('info');
+  let infoExpanded = false;
+
+  // --- ÉVSZAK SORSOLÁS ---
+  const springColors = [0xffb7c5, 0xfff0f5, 0xf6e2dd, 0x8fb36d, 0xa4c639];
+  const autumnColors = [0xd6b85a, 0xc2571a, 0x8a3324, 0xe08e00, 0x5c4033];
+
+  const isSpring = Math.random() > 0.5;
+  const activeLeafColors = isSpring ? springColors : autumnColors;
+  const groundColor = isSpring ? 0x325026 : 0x4a402c;
+
+  // --- ALAP BEÁLLÍTÁSOK ---
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  scene.fog = new THREE.FogExp2(0x000000, 0.0);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.position.set(30, 15, 30);
+
+  // LOW-HEAT
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.0));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.065;
+  controls.enablePan = false;
+  controls.target.set(0, 9.8, 0);
+  controls.minDistance = 13;
+  controls.maxDistance = 35;
+  controls.minPolarAngle = 0.25;
+  controls.maxPolarAngle = Math.PI - 0.01;
+
+  // --- FÉNYEK ---
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
+  scene.add(ambientLight);
+
+  const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  sunLight.position.set(10, 40, 10);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048, 2048);
+  sunLight.shadow.radius = 4;
+  sunLight.shadow.camera.near = 0.5;
+  sunLight.shadow.camera.far = 150;
+  sunLight.shadow.camera.left = -50;
+  sunLight.shadow.camera.right = 50;
+  sunLight.shadow.camera.top = 50;
+  sunLight.shadow.camera.bottom = -50;
+  sunLight.shadow.bias = -0.0001;
+  scene.add(sunLight);
+
+  const hemiLight = new THREE.HemisphereLight(0xfff8e0, groundColor, 0.0);
+  scene.add(hemiLight);
+
+  const fillLight = new THREE.DirectionalLight(0xfff3e0, 0.0);
+  fillLight.position.set(-30, 25, -25);
+  scene.add(fillLight);
+
+  // --- VILÁG ÉPÍTÉS ---
+  const voxelSize = 1;
+  const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+  const worldGroup = new THREE.Group();
+  scene.add(worldGroup);
+
+  function createVoxel(x, y, z, material, isSmall = false) {
+    const geo = isSmall ? new THREE.BoxGeometry(0.6, 0.6, 0.6) : boxGeo;
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    worldGroup.add(mesh);
+  }
+
+  // Törzs
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9, metalness: 0.0 });
+
+  for (let y = 0; y < 9; y++) {
+    createVoxel(0, y, 0, trunkMat);
+    if (y > 0 && y < 7) {
+      createVoxel(1, y - 0.3, 0, trunkMat);
+      createVoxel(-1, y - 0.3, 0, trunkMat);
+      createVoxel(0, y - 0.3, 1, trunkMat);
+      createVoxel(0, y - 0.3, -1, trunkMat);
+    }
+  }
+  [[1,0], [-1,0], [0,1], [0,-1]].forEach(([x,z]) => createVoxel(x, 0.1, z, trunkMat));
+
+  // Lomb
+  for (let x = -5; x <= 5; x++) {
+    for (let y = 6; y <= 13; y++) {
+      for (let z = -5; z <= 5; z++) {
+        const dx = x * 1.2;
+        const dy = (y - 9);
+        const dz = z * 1.2;
+        if (Math.sqrt(dx*dx + dy*dy + dz*dz) < 4.2 + Math.random() * 0.8) {
+          if (x === 0 && z === 0 && y < 10) continue;
+          const color = activeLeafColors[Math.floor(Math.random() * activeLeafColors.length)];
+          const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.0 });
+          const isSmall = Math.random() > 0.7;
+          createVoxel(x, y, z, mat, isSmall);
+        }
+      }
+    }
+  }
+
+  // Talaj
+  const groundMat = new THREE.MeshStandardMaterial({ color: groundColor, roughness: 1.0, metalness: 0.0 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Fű
+  const grassBlades = [];
+  const grassGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
+  for (let i = 0; i < 2000; i++) {
+    let x = (Math.random() - 0.5) * 70;
+    let z = (Math.random() - 0.5) * 70;
+    if (Math.sqrt(x * x + z * z) < 3) continue;
+
+    let color = Math.random() > 0.9
+      ? activeLeafColors[Math.floor(Math.random() * activeLeafColors.length)]
+      : groundColor;
+
+    const blade = new THREE.Mesh(
+      grassGeo,
+      new THREE.MeshStandardMaterial({ color, roughness: 1, metalness: 0.0 })
+    );
+    blade.position.set(x, 0.25, z);
+    blade.rotation.y = Math.random() * Math.PI;
+    blade.castShadow = true;
+    blade.receiveShadow = true;
+    blade.userData = { initialX: blade.rotation.x, windOffset: Math.random() * 10, windSpeed: 0.5 + Math.random() * 0.5 };
+    worldGroup.add(blade);
+    grassBlades.push(blade);
+  }
+
+  // --- EFFEKTEK ---
+  function resetParticle(p, heightBase, spread = 10) {
+    p.position.set(
+      (Math.random() - 0.5) * 2 * spread,
+      heightBase + Math.random() * 5,
+      (Math.random() - 0.5) * 2 * spread
+    );
+    p.userData.speed = 0.01 + Math.random() * 0.02;
+    p.userData.rotSpeed = (Math.random() - 0.5) * 0.06;
+    p.userData.wobble = Math.random() * 10;
+  }
+
+  // Hulló levelek
+  const fallingLeaves = [];
+  const leafGeo = new THREE.PlaneGeometry(0.3, 0.3);
+  for (let i = 0; i < 80; i++) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: activeLeafColors[Math.floor(Math.random() * activeLeafColors.length)],
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      roughness: 0.8,
+      metalness: 0.0
+    });
+    const leaf = new THREE.Mesh(leafGeo, mat);
+    resetParticle(leaf, 15);
+    scene.add(leaf);
+    fallingLeaves.push(leaf);
+  }
+
+  // Csillagok
+  const starCount = 3000;
+  const starPositions = new Float32Array(starCount * 3);
+  const starRadius = 120;
+
+  for (let i = 0; i < starCount; i++) {
+    const u = Math.random();
+    const v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+    const r = starRadius;
+
+    starPositions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+    starPositions[i * 3 + 1] = r * Math.cos(phi);
+    starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+
+  const starMat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 2.4,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false
+  });
+
+  const stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
+  let starBaseOpacity = 0;
+
+  // Szentjánosbogarak
+  const fireflies = [];
+  let fireflyBaseOpacity = 0;
+
+  function resetFirefly(f) {
+    const minR = 2, maxR = 6;
+    const r = minR + Math.random() * (maxR - minR);
+    const angle = Math.random() * Math.PI * 2;
+
+    f.position.set(
+      Math.cos(angle) * r,
+      1.2 + Math.random() * 3.5,
+      Math.sin(angle) * r
+    );
+    f.userData.offset = Math.random() * 100;
+  }
+
+  if (isSpring) {
+    const fireflyGeo = new THREE.SphereGeometry(0.12, 6, 6);
+    const fireflyMat = new THREE.MeshBasicMaterial({ color: 0xaaff00, transparent: true, opacity: 0 });
+    for (let i = 0; i < 30; i++) {
+      const fly = new THREE.Mesh(fireflyGeo, fireflyMat.clone());
+      resetFirefly(fly);
+      scene.add(fly);
+      fireflies.push(fly);
+    }
+  }
+
+  // --- NAPSZAK ---
+  let timeOfDay = 0;
+  const cycleDuration = 300; // 5 perc / nap
+  const startOffset = 0.20;
+
+  const dayColors = {
+    dawn:   { sky: 0xffbfa7, sun: 0xffe0b2, ambient: 0xffe3d2, fog: 0.02,  sunIntensity: 0.35, ambientIntensity: 0.35, hemiIntensity: 0.08, fillIntensity: 0.14, exposure: 1.05, sunHeight: 0.2 },
+    morning:{ sky: 0xffefba, sun: 0xfff6cf, ambient: 0xfff5e3, fog: 0.035, sunIntensity: 0.85, ambientIntensity: 0.50, hemiIntensity: 0.18, fillIntensity: 0.50, exposure: 1.02, sunHeight: 0.65 },
+    noon:   { sky: 0x2f98ff, sun: 0xffffff, ambient: 0xffffff, fog: 0.0,  sunIntensity: 1.0,  ambientIntensity: 0.55, hemiIntensity: 0.22, fillIntensity: 0.70, exposure: 0.90, sunHeight: 1.0 },
+    night:  { sky: 0x02030d, sun: 0xcfd6ff, ambient: 0x05060b, fog: 0.0,  sunIntensity: 0.18, ambientIntensity: 0.16, hemiIntensity: 0.18, fillIntensity: 0.06, exposure: 1.65, sunHeight: 0.05 }
+  };
+
+  function updateEnvironment(elapsed) {
+    const raw = (elapsed / cycleDuration) % 1;
+    timeOfDay = (raw + startOffset) % 1;
+
+    let state, nextState, blend;
+    const dawnEnd = 0.16, morningEnd = 0.36, noonEnd = 0.60, eveningEnd = 0.70;
+
+    if (timeOfDay < dawnEnd) {
+      state = dayColors.night; nextState = dayColors.dawn;
+      blend = (timeOfDay <= 0.05) ? 0.0 : THREE.MathUtils.smoothstep(timeOfDay, 0.05, dawnEnd);
+    } else if (timeOfDay < morningEnd) {
+      state = dayColors.dawn; nextState = dayColors.morning;
+      blend = (timeOfDay - dawnEnd) / (morningEnd - dawnEnd);
+    } else if (timeOfDay < noonEnd) {
+      state = dayColors.morning; nextState = dayColors.noon;
+      blend = (timeOfDay - morningEnd) / (noonEnd - morningEnd);
+    } else if (timeOfDay < eveningEnd) {
+      state = dayColors.noon; nextState = dayColors.night;
+      blend = (timeOfDay - noonEnd) / (eveningEnd - noonEnd);
+    } else {
+      state = dayColors.night; nextState = dayColors.night; blend = 0.0;
+    }
+
+    const skyColor = new THREE.Color(state.sky).lerp(new THREE.Color(nextState.sky), blend);
+    scene.background = skyColor;
+    scene.fog.color.copy(skyColor);
+
+    const baseFog = THREE.MathUtils.lerp(state.fog, nextState.fog, blend);
+    let fogFactor = 0.0;
+    if (timeOfDay >= 0.08 && timeOfDay <= 0.32) {
+      if (timeOfDay < 0.12) fogFactor = THREE.MathUtils.smoothstep(timeOfDay, 0.08, 0.12);
+      else if (timeOfDay > 0.28) fogFactor = 1.0 - THREE.MathUtils.smoothstep(timeOfDay, 0.28, 0.32);
+      else fogFactor = 1.0;
+    }
+    scene.fog.density = baseFog * fogFactor;
+
+    sunLight.color.lerpColors(new THREE.Color(state.sun), new THREE.Color(nextState.sun), blend);
+    ambientLight.color.lerpColors(new THREE.Color(state.ambient), new THREE.Color(nextState.ambient), blend);
+
+    sunLight.intensity = THREE.MathUtils.lerp(state.sunIntensity, nextState.sunIntensity, blend);
+    ambientLight.intensity = THREE.MathUtils.lerp(state.ambientIntensity, nextState.ambientIntensity, blend);
+    hemiLight.intensity = THREE.MathUtils.lerp(state.hemiIntensity, nextState.hemiIntensity, blend);
+    fillLight.intensity = THREE.MathUtils.lerp(state.fillIntensity, nextState.fillIntensity, blend);
+    renderer.toneMappingExposure = THREE.MathUtils.lerp(state.exposure, nextState.exposure, blend);
+
+    hemiLight.color.copy(skyColor);
+    hemiLight.groundColor.set(groundColor);
+
+    const theta = timeOfDay * Math.PI * 2 - Math.PI / 2;
+    const sunHeight = THREE.MathUtils.lerp(state.sunHeight, nextState.sunHeight, blend);
+    const radius = 45;
+    sunLight.position.set(Math.cos(theta) * radius, 10 + sunHeight * 40, Math.sin(theta) * radius * 0.6);
+
+    let starVisibility = 0;
+    if (timeOfDay >= 0.55 && timeOfDay <= 0.65) starVisibility = THREE.MathUtils.smoothstep(timeOfDay, 0.55, 0.65);
+    else if (timeOfDay > 0.65 && timeOfDay < 0.90) starVisibility = 1.0;
+    else if (timeOfDay >= 0.90 && timeOfDay <= 1.0) starVisibility = 1.0;
+    else if (timeOfDay >= 0.0 && timeOfDay <= 0.05) starVisibility = 1.0;
+    else if (timeOfDay > 0.05 && timeOfDay <= 0.16) starVisibility = 1.0 - THREE.MathUtils.smoothstep(timeOfDay, 0.05, 0.16);
+
+    starVisibility = THREE.MathUtils.clamp(starVisibility, 0, 1);
+    starBaseOpacity = starVisibility * 1.1;
+    starMat.opacity = starBaseOpacity;
+
+    let fireflyFactor = 0.0;
+    if (timeOfDay >= 0.72 && timeOfDay <= 0.80) fireflyFactor = THREE.MathUtils.smoothstep(timeOfDay, 0.72, 0.80);
+    else if (timeOfDay > 0.80 && timeOfDay < 0.88) fireflyFactor = 1.0;
+    else if (timeOfDay >= 0.88 && timeOfDay <= 0.92) fireflyFactor = 1.0 - THREE.MathUtils.smoothstep(timeOfDay, 0.88, 0.92);
+
+    fireflyBaseOpacity = THREE.MathUtils.clamp(fireflyFactor, 0, 1);
+  }
+
+  // --- ANIM ---
+  const clock = new THREE.Clock();
+  const TARGET_FPS = 45;
+  const FRAME_TIME = 1000 / TARGET_FPS;
+  let lastFrameTime = 0;
+
+  infoEl.addEventListener('click', () => {
+    infoExpanded = !infoExpanded;
+    if (!infoExpanded) infoEl.textContent = "Info";
+  });
+
+  function animate(t = 0) {
+    requestAnimationFrame(animate);
+    if (t - lastFrameTime < FRAME_TIME) return;
+    lastFrameTime = t;
+
+    const elapsed = clock.getElapsedTime();
+
+    controls.update();
+    if (camera.position.y < 0.12) camera.position.y = 0.12;
+
+    updateEnvironment(elapsed);
+
+    if (infoExpanded) {
+      const dayNumber = 1 + Math.floor(elapsed / cycleDuration);
+      infoEl.textContent = `Day ${dayNumber}`;
+    }
+
+    grassBlades.forEach(b => {
+      b.rotation.x = b.userData.initialX +
+        Math.sin(elapsed * b.userData.windSpeed + b.position.x * 0.2 + b.userData.windOffset) * 0.10;
+    });
+
+    fallingLeaves.forEach(leaf => {
+      const dayFactor = (timeOfDay > 0.25 && timeOfDay < 0.75) ? 0.9 : 0.7;
+      leaf.position.y -= leaf.userData.speed * dayFactor;
+      leaf.position.x += Math.sin(elapsed * 0.8 + leaf.userData.wobble) * 0.015;
+      leaf.rotation.x += leaf.userData.rotSpeed;
+      leaf.rotation.z += leaf.userData.rotSpeed * 0.5;
+      if (leaf.position.y < 0) resetParticle(leaf, 15);
+    });
+
+    if (fireflies.length) {
+      fireflies.forEach(f => {
+        const tt = elapsed * 0.25 + f.userData.offset;
+
+        f.position.x += (Math.sin(tt) * 0.025 + Math.sin(tt * 0.7) * 0.015);
+        f.position.z += (Math.cos(tt * 0.9) * 0.025 + Math.cos(tt * 0.5) * 0.015);
+        f.position.y += Math.sin(tt) * 0.01;
+
+        const r = Math.sqrt(f.position.x * f.position.x + f.position.z * f.position.z);
+        const maxR = 6;
+        if (r > maxR) {
+          f.position.x = (f.position.x / r) * maxR;
+          f.position.z = (f.position.z / r) * maxR;
+        }
+
+        f.position.y = THREE.MathUtils.clamp(f.position.y, 1.0, 5.5);
+
+        if (Math.random() < 0.0005) resetFirefly(f);
+
+        if (f.material) f.material.opacity = fireflyBaseOpacity;
+        f.visible = fireflyBaseOpacity > 0.02;
+      });
+    }
+
+    stars.rotation.y = elapsed * 0.01;
+    const twinkle = 0.9 + 0.12 * Math.sin(elapsed * 2.4) + 0.05 * Math.sin(elapsed * 7.3);
+    starMat.opacity = starBaseOpacity * twinkle;
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+
+<script>
+  // ✅ Your playlist (PL...)
+  const YT_PLAYLIST_ID = "PLBUKnz_QLV1Nb52HvNMVsFgiCUj-BIEf2";
+
+  // --- YouTube embed URL (eltárolva, hogy újratöltés nélkül is tudjuk "leállítani") ---
+  const ytIframe = document.getElementById("yt-embed");
+  const playerWrap = document.getElementById("player-wrap");
+
+  function buildYtSrc(){
+    let src = `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(YT_PLAYLIST_ID)}&playsinline=1&rel=0`;
+    if (location.protocol === "http:" || location.protocol === "https:") {
+      src += `&origin=${encodeURIComponent(location.origin)}`;
+    }
+    return src;
+  }
+  const YT_SRC = buildYtSrc();
+
+  (function initYT(){
+    // betöltjük alapból, hogy kattintásra azonnal látszódjon (de display:none miatt nem fut "láthatóan")
+    ytIframe.src = YT_SRC;
+
+    document.getElementById("open-yt").href =
+      `https://www.youtube.com/playlist?list=${encodeURIComponent(YT_PLAYLIST_ID)}`;
+  })();
+
+  // ✅ Stop MP3
+  function stopOneSong(){
+    const audio = document.getElementById('one-song-audio');
+    const btn = document.getElementById('one-song-btn');
+    if (!audio.paused) audio.pause();
+    audio.currentTime = 0;
+    btn.innerText = "🎧 Play";
+  }
+
+  // ✅ Stop YouTube (legbiztosabb: iframe reset -> leállítja a hangot)
+  function stopYouTube(){
+    // elrejtjük + hard stop (src cserével)
+    playerWrap.style.display = 'none';
+    ytIframe.src = "about:blank";
+  }
+
+  // ✅ YouTube visszatöltés (ha leállítottuk)
+  function ensureYouTubeLoaded(){
+    if (ytIframe.src === "about:blank" || ytIframe.src === "" || ytIframe.src == null) {
+      ytIframe.src = YT_SRC;
+    }
+  }
+
+  // ✅ YouTube mini-player show/hide
+  // Szabály: bármilyen nyomásra álljon le a másik -> itt mindig leállítjuk az MP3-at
+  function toggleMusic() {
+    stopOneSong(); // ✅ bármilyen nyomás -> másik leáll
+
+    const willShow = (playerWrap.style.display !== 'block');
+
+    if (willShow) {
+      ensureYouTubeLoaded();
+      playerWrap.style.display = 'block';
+    } else {
+      // hide-ra is "stop" legyen (ne csak elrejtés)
+      stopYouTube();
+    }
+  }
+
+  // ✅ One song (MP3) play/pause
+  // Szabály: bármilyen nyomásra álljon le a másik -> itt mindig leállítjuk a YouTube-ot
+  function toggleOneSong(){
+    stopYouTube(); // ✅ bármilyen nyomás -> másik leáll (és el is rejti)
+
+    const audio = document.getElementById('one-song-audio');
+    const btn = document.getElementById('one-song-btn');
+
+    if (audio.paused) {
+      audio.volume = 0.3;
+      audio.play();
+      btn.innerText = "⏸ Play";
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+      btn.innerText = "🎧 Play";
+    }
+  }
+</script>
+
+</body>
+</html>
