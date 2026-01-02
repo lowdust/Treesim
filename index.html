@@ -7,7 +7,6 @@
     body { margin: 0; overflow: hidden; background-color: #000; }
     canvas { display: block; }
 
-    /* ✅ Közös “pill” gomb stílus */
     .pill-btn{
       background: rgba(255, 255, 255, 0.15);
       padding: 12px 20px;
@@ -31,7 +30,6 @@
     }
     .pill-btn:hover { background: rgba(255, 255, 255, 0.3); }
 
-    /* ✅ Info (bal felül) */
     #info{
       position:absolute;
       top: 12px; left: 12px;
@@ -39,7 +37,6 @@
       pointer-events: auto;
     }
 
-    /* ✅ Jobb alsó gomb-sor */
     #controls-row{
       position:absolute;
       bottom: 20px; right: 20px;
@@ -48,7 +45,6 @@
       z-index: 20;
     }
 
-    /* ✅ YouTube mini-player keret */
     #player-wrap{
       display:none;
       position:absolute;
@@ -85,18 +81,15 @@
 
 <div id="info" class="pill-btn">Info</div>
 
-<!-- ✅ MP3 lejátszó -->
 <audio id="one-song-audio" preload="none" loop>
   <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112762.mp3" type="audio/mpeg">
 </audio>
 
-<!-- ✅ Jobb alsó gombok -->
 <div id="controls-row">
   <div id="one-song-btn" class="pill-btn" onclick="toggleOneSong()">🎧 Play</div>
   <div id="audio-control" class="pill-btn" onclick="toggleMusic()">🎵 Playlist</div>
 </div>
 
-<!-- ✅ YouTube mini-player -->
 <div id="player-wrap">
   <iframe
     id="yt-embed"
@@ -121,11 +114,9 @@
   import * as THREE from 'three';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-  // --- INFO: kattintásra Day számláló (csak session-ben) ---
   const infoEl = document.getElementById('info');
   let infoExpanded = false;
 
-  // --- ÉVSZAK SORSOLÁS ---
   const springColors = [0xffb7c5, 0xfff0f5, 0xf6e2dd, 0x8fb36d, 0xa4c639];
   const autumnColors = [0xd6b85a, 0xc2571a, 0x8a3324, 0xe08e00, 0x5c4033];
 
@@ -133,7 +124,6 @@
   const activeLeafColors = isSpring ? springColors : autumnColors;
   const groundColor = isSpring ? 0x325026 : 0x4a402c;
 
-  // --- ALAP BEÁLLÍTÁSOK ---
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
   scene.fog = new THREE.FogExp2(0x000000, 0.0);
@@ -141,7 +131,6 @@
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
   camera.position.set(30, 15, 30);
 
-  // LOW-HEAT
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.0));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -164,7 +153,6 @@
   controls.minPolarAngle = 0.25;
   controls.maxPolarAngle = Math.PI - 0.01;
 
-  // --- FÉNYEK ---
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
   scene.add(ambientLight);
 
@@ -189,7 +177,6 @@
   fillLight.position.set(-30, 25, -25);
   scene.add(fillLight);
 
-  // --- VILÁG ÉPÍTÉS ---
   const voxelSize = 1;
   const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
   const worldGroup = new THREE.Group();
@@ -204,7 +191,6 @@
     worldGroup.add(mesh);
   }
 
-  // Törzs
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9, metalness: 0.0 });
 
   for (let y = 0; y < 9; y++) {
@@ -218,7 +204,6 @@
   }
   [[1,0], [-1,0], [0,1], [0,-1]].forEach(([x,z]) => createVoxel(x, 0.1, z, trunkMat));
 
-  // Lomb
   for (let x = -5; x <= 5; x++) {
     for (let y = 6; y <= 13; y++) {
       for (let z = -5; z <= 5; z++) {
@@ -236,14 +221,12 @@
     }
   }
 
-  // Talaj
   const groundMat = new THREE.MeshStandardMaterial({ color: groundColor, roughness: 1.0, metalness: 0.0 });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Fű
   const grassBlades = [];
   const grassGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
   for (let i = 0; i < 2000; i++) {
@@ -268,7 +251,6 @@
     grassBlades.push(blade);
   }
 
-  // --- EFFEKTEK ---
   function resetParticle(p, heightBase, spread = 10) {
     p.position.set(
       (Math.random() - 0.5) * 2 * spread,
@@ -280,7 +262,6 @@
     p.userData.wobble = Math.random() * 10;
   }
 
-  // Hulló levelek
   const fallingLeaves = [];
   const leafGeo = new THREE.PlaneGeometry(0.3, 0.3);
   for (let i = 0; i < 80; i++) {
@@ -298,7 +279,6 @@
     fallingLeaves.push(leaf);
   }
 
-  // Csillagok
   const starCount = 3000;
   const starPositions = new Float32Array(starCount * 3);
   const starRadius = 120;
@@ -331,7 +311,6 @@
   scene.add(stars);
   let starBaseOpacity = 0;
 
-  // Szentjánosbogarak
   const fireflies = [];
   let fireflyBaseOpacity = 0;
 
@@ -359,9 +338,8 @@
     }
   }
 
-  // --- NAPSZAK ---
   let timeOfDay = 0;
-  const cycleDuration = 300; // 5 perc / nap
+  const cycleDuration = 300;
   const startOffset = 0.20;
 
   const dayColors = {
@@ -443,7 +421,6 @@
     fireflyBaseOpacity = THREE.MathUtils.clamp(fireflyFactor, 0, 1);
   }
 
-  // --- ANIM ---
   const clock = new THREE.Clock();
   const TARGET_FPS = 45;
   const FRAME_TIME = 1000 / TARGET_FPS;
@@ -526,10 +503,8 @@
 </script>
 
 <script>
-  // ✅ Your playlist (PL...)
   const YT_PLAYLIST_ID = "PLBUKnz_QLV1Nb52HvNMVsFgiCUj-BIEf2";
 
-  // --- YouTube embed URL (eltárolva, hogy újratöltés nélkül is tudjuk "leállítani") ---
   const ytIframe = document.getElementById("yt-embed");
   const playerWrap = document.getElementById("player-wrap");
 
@@ -543,9 +518,7 @@
   const YT_SRC = buildYtSrc();
 
   (function initYT(){
-    // betöltjük alapból, hogy kattintásra azonnal látszódjon (de display:none miatt nem fut "láthatóan")
     ytIframe.src = YT_SRC;
-
     document.getElementById("open-yt").href =
       `https://www.youtube.com/playlist?list=${encodeURIComponent(YT_PLAYLIST_ID)}`;
   })();
@@ -559,10 +532,9 @@
     btn.innerText = "🎧 Play";
   }
 
-  // ✅ Stop YouTube (legbiztosabb: iframe reset -> leállítja a hangot)
+  // ✅ Stop YouTube (hard stop)
   function stopYouTube(){
-    // elrejtjük + hard stop (src cserével)
-    playerWrap.style.display = 'none';
+    // fontos: ezt csak akkor hívjuk, amikor a másik (MP3) indul, nem amikor csak elrejted
     ytIframe.src = "about:blank";
   }
 
@@ -573,26 +545,25 @@
     }
   }
 
-  // ✅ YouTube mini-player show/hide
-  // Szabály: bármilyen nyomásra álljon le a másik -> itt mindig leállítjuk az MP3-at
+  // ✅ Playlist gomb: csak show/hide (NEM állítja le a YouTube-ot hide-nál)
+  // Viszont bármilyen nyomásra az MP3 álljon le -> ezt meghagyjuk
   function toggleMusic() {
-    stopOneSong(); // ✅ bármilyen nyomás -> másik leáll
+    stopOneSong();
 
-    const willShow = (playerWrap.style.display !== 'block');
-
-    if (willShow) {
+    const isVisible = (playerWrap.style.display === 'block');
+    if (isVisible) {
+      playerWrap.style.display = 'none'; // ✅ csak elrejti
+    } else {
       ensureYouTubeLoaded();
       playerWrap.style.display = 'block';
-    } else {
-      // hide-ra is "stop" legyen (ne csak elrejtés)
-      stopYouTube();
     }
   }
 
-  // ✅ One song (MP3) play/pause
-  // Szabály: bármilyen nyomásra álljon le a másik -> itt mindig leállítjuk a YouTube-ot
+  // ✅ MP3 gomb: bármilyen nyomásra leállítja a YouTube-ot (és el is rejti), majd play/pause MP3
   function toggleOneSong(){
-    stopYouTube(); // ✅ bármilyen nyomás -> másik leáll (és el is rejti)
+    // YouTube leáll + elrejt
+    playerWrap.style.display = 'none';
+    stopYouTube();
 
     const audio = document.getElementById('one-song-audio');
     const btn = document.getElementById('one-song-btn');
